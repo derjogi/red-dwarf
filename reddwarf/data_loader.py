@@ -1,5 +1,7 @@
+from enum import Enum
 import json
 import os
+from typing import Literal
 from fake_useragent import UserAgent
 from datetime import datetime, timedelta, timezone
 from requests_ratelimiter import SQLiteBucket, LimiterSession
@@ -58,6 +60,23 @@ class Loader():
             # If not set, write it from what's provided.
             self.polis_id = self.report_id or self.conversation_id
 
+    class ReportType(Enum):
+        SUMMARY = "summary"
+        VOTES = "votes"
+        COMMENTS = "comments"
+        PARTICIPANT_VOTES = "participant-votes"
+        COMMENT_GROUPS = "comment-groups"
+
+    def fetch_csv(self, output_dir, type: ReportType):
+        print(f"Downloading CSVs from remote server to {output_dir}")
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        with open(f"{output_dir}/{self.report_id}_{type.value}.csv", 'w') as f:
+            r = self.session.get(f"{self.polis_instance_url}/api/v3/reportExport/{self.report_id}/{type.value}.csv")
+            f.write(r.text)
+        return f
+
     def dump_data(self, output_dir):
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -78,7 +97,12 @@ class Loader():
             with open(output_dir + "/conversation.json", 'w') as f:
                 f.write(json.dumps(self.conversation_data, indent=4))
 
-    def export_polis_format(self, output_dir):
+    def export_polis_format(self, output_dir=None):
+        if not output_dir:
+            if self.output_dir:
+                output_dir = self.output_dir
+            else:
+                raise ValueError("output_dir must be set in either the loader or as parameter to this function")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
